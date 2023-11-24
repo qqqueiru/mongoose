@@ -5,6 +5,11 @@
 #include "mongoose.h"
 #include "net.h"
 
+#ifdef RUNINFLASH
+#include "itcram.h"
+#define ITCRAM_START ((char *) 0x0)
+#endif
+
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 static volatile uint64_t s_ticks;  // Milliseconds since boot
@@ -60,11 +65,47 @@ int main(void) {
   gpio_output(LED);               // Setup blue LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
+
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
+
+#ifdef RUNINFLASH
+  char *dst = ITCRAM_START;
+  for (size_t i = 0; i < sizeof(ramcode); i++) {
+    *dst++ = ramcode[i];
+  }
+#endif
 
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
+
+#ifdef RUNINFLASH
+  mg_ota_boot();
+
+#ifdef MQTT_DASHBOARD
+  // User can customise the MQTT url, device ID or the root topic below
+#define DEVICE_ID "RT1020"
+  g_url = MQTT_SERVER_URL;
+  g_device_id = DEVICE_ID;
+  g_root_topic = MQTT_ROOT_TOPIC;
+#endif
+
+  #if MG_OTA == MG_OTA_FLASH
+  // Demonstrate the use of mg_flash_{load/save} functions for keeping device
+  // configuration data on flash. Increment boot count on every boot.
+  struct deviceconfig {
+    uint32_t boot_count;
+    char some_other_data[40];
+  };
+  uint32_t key = 0x12345678;    // A unique key, one per data type
+  struct deviceconfig dc = {};  // Initialise to some default values
+  mg_flash_load(NULL, key, &dc, sizeof(dc));  // Load from flash
+  dc.boot_count++;                            // Increment boot count
+  mg_flash_save(NULL, key, &dc, sizeof(dc));  // And save back
+  MG_INFO(("Boot count: %u", dc.boot_count));
+#endif
+
+#endif
 
   // Initialise Mongoose network stack
   struct mg_tcpip_driver_imxrt_data driver_data = {.mdc_cr = 24, .phy_addr = 2};
