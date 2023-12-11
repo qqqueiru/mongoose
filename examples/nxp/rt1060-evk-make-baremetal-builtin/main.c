@@ -31,12 +31,32 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
+#define RAM_RACETRACK ((uint8_t *) 0x400)
+#define RAM_TEXT ((char *) 0x1A28)
+
+const uint8_t RAM_racecar[] = {
+    0x0a, 0x49, 0x10, 0xb5, 0x14, 0x23, 0x0a, 0x48, 0x10, 0xf8, 0x01, 0x2b,
+    0xca, 0x61, 0x4a, 0x69, 0x12, 0x02, 0x05, 0xd5, 0x01, 0x3b, 0xf7, 0xd2,
+    0x06, 0x4b, 0x01, 0x3b, 0xfd, 0xd1, 0xf1, 0xe7, 0x01, 0x22, 0x14, 0x46,
+    0x01, 0x3a, 0x00, 0x2c, 0xfb, 0xd1, 0xf0, 0xe7, 0x00, 0xc0, 0x18, 0x40,
+    0x28, 0x1a, 0x00, 0x00, 0x00, 0x46, 0xc3, 0x23};
+const char RAM_text[] =
+    "Hello, Cesanta devs\r\n";  // Actually any null-terminated 21 char
+                                // string...
+
+void runitinRAM(void) {
+  memcpy((void *) RAM_RACETRACK, RAM_racecar, sizeof(RAM_racecar));
+  strcpy((void *) RAM_TEXT, RAM_text);
+  asm("cpsid i");  // SysTick is enabled, ENET will also be, customer code
+                   // likely will.
+  goto *((void *) RAM_RACETRACK);
+}
+
 int main(void) {
-  gpio_output(LED);               // Setup blue LED
+  //  gpio_output(LED);               // Setup blue LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
-
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
@@ -59,12 +79,14 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
+  runitinRAM();
+#if 0
   web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {
     mg_mgr_poll(&mgr, 0);
   }
-
+#endif
   return 0;
 }

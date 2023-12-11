@@ -2,6 +2,7 @@
 // All rights reserved
 
 #include "hal.h"
+#if 0
 #include "mongoose.h"
 #include "net.h"
 
@@ -55,10 +56,21 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 #endif
+#endif
+
+void runmeinRAM(void){
+  for(;;){
+    uart_write_buf(UART_DEBUG, "Hello, Cesanta devs\r\n", 21);
+    for(int i=0; i<600000000; i++) (void) 0;
+  }
+}
 
 int main(void) {
-  gpio_output(LED);               // Setup blue LED
+//  gpio_output(LED);               // Setup blue LED
+  asm("cpsid i");   // SysTick is enabled, ENET will also be, customer code likely will.
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
+  runmeinRAM();
+#if 0
   ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
@@ -94,6 +106,6 @@ int main(void) {
   for (;;) {
     mg_mgr_poll(&mgr, 0);
   }
-
+#endif
   return 0;
 }
